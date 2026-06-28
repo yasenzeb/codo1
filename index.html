@@ -1,0 +1,161 @@
+
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Digital Product Agency</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="lang-switch" id="langSwitch">
+    <button class="lang-btn active" data-lang="en">EN</button>
+    <button class="lang-btn" data-lang="ar">AR</button>
+  </div>
+
+  <main>
+    <!-- HERO -->
+    <section class="view hero active" id="view-hero">
+      <div class="hero-inner">
+        <p class="eyebrow" data-i18n="eyebrow">Digital Product Agency</p>
+        <h1 class="headline" data-i18n="headline">We help businesses grow through premium digital experiences.</h1>
+        <p class="sub" data-i18n="sub">Not just websites. Products that increase trust, conversions, and revenue.</p>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px; max-width: 320px; margin: 0 auto;">
+          <button class="cta" id="startQuiz" style="width: 100%;">
+            <span data-i18n="cta">Analyze my business</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+          </button>
+          
+          <button class="btn-secondary" id="trackOrderBtn" style="display: none; width: 100%; height: 56px; border-radius: 10px; font-weight: 500; font-size: 16px; border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; align-items: center; justify-content: center; gap: 8px;">
+            <span data-i18n="trackOrder">Track My Order</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+        
+        <div class="footnote" data-i18n="footnote">No commitment required</div>
+      </div>
+    </section>
+
+    <!-- QUIZ -->
+    <section class="view quiz" id="view-quiz">
+      <div class="quiz-inner">
+        <div class="quiz-head">
+          <span class="q-count"><span data-i18n="question">Question</span> <span id="qNow">1</span> <span data-i18n="of">of</span> <span id="qTotal">5</span></span>
+          <span class="q-pct"><span id="qPct">20</span>% <span data-i18n="complete">complete</span></span>
+        </div>
+        <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+        <h2 class="q-title" id="qTitle"></h2>
+        <p class="q-desc" id="qDesc"></p>
+
+        <div class="options" id="options"></div>
+
+        <div class="quiz-actions">
+          <button class="btn-secondary" id="backBtn" data-i18n="back">Back</button>
+          <button class="btn-primary" id="continueBtn" data-i18n="continue">Continue</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORM -->
+    <section class="view quiz" id="view-form">
+      <div class="quiz-inner">
+        <h2 class="q-title" data-i18n="formTitle">Enter your business details</h2>
+        <p class="q-desc" data-i18n="formDesc">Please fill out this form to complete your AI-powered business analysis.</p>
+
+        <form id="businessForm" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 24px;">
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: start;">
+            <label style="font-size: 14px; font-weight: 500;" data-i18n="lblBizName">Business Name</label>
+            <input type="text" id="bizName" required style="width:100%; height:44px; padding:0 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--fg); font-family:inherit; font-size:15px;" placeholder="e.g. My Awesome Brand" />
+          </div>
+
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: start;">
+            <label style="font-size: 14px; font-weight: 500;" data-i18n="lblBizType">Business Type</label>
+            <input type="text" id="bizType" readonly disabled style="width:100%; height:44px; padding:0 14px; border-radius:8px; border:1px solid var(--border); background:var(--secondary); color:var(--muted); font-family:inherit; font-size:15px; cursor:not-allowed;" />
+          </div>
+
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: start;">
+            <label style="font-size: 14px; font-weight: 500;" data-i18n="lblBizPhone">Phone Number</label>
+            <input type="tel" id="bizPhone" required style="width:100%; height:44px; padding:0 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--fg); font-family:inherit; font-size:15px;" placeholder="e.g. 01012345678" />
+            <span class="error-msg" id="phoneError" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;" data-i18n="errPhone">Please enter a valid Egyptian phone number (e.g. 010xxxxxxxx)</span>
+          </div>
+
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: start;">
+            <label style="font-size: 14px; font-weight: 500;" data-i18n="lblBizEmail">Email Address (Optional)</label>
+            <input type="email" id="bizEmail" style="width:100%; height:44px; padding:0 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--fg); font-family:inherit; font-size:15px;" placeholder="e.g. name@domain.com" />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; text-align: start;">
+            <label style="font-size: 14px; font-weight: 500;" data-i18n="lblSocials">Social Media Links (Optional)</label>
+            
+            <div style="display: flex; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 0 12px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--muted);"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+              <input type="text" id="bizInstagram" placeholder="Instagram Username / URL" style="flex: 1; height: 44px; border: 0; background: transparent; color: var(--fg); font-family: inherit; font-size: 14px; outline: none;" />
+            </div>
+
+            <div style="display: flex; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 0 12px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--muted);"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/></svg>
+              <input type="text" id="bizTiktok" placeholder="TikTok Username / URL" style="flex: 1; height: 44px; border: 0; background: transparent; color: var(--fg); font-family: inherit; font-size: 14px; outline: none;" />
+            </div>
+
+            <div style="display: flex; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 0 12px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--muted);"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+              <input type="text" id="bizFacebook" placeholder="Facebook Profile / URL" style="flex: 1; height: 44px; border: 0; background: transparent; color: var(--fg); font-family: inherit; font-size: 14px; outline: none;" />
+            </div>
+          </div>
+
+          <div class="quiz-actions" style="margin-top: 12px;">
+            <button type="button" class="btn-secondary" id="formBackBtn" data-i18n="back">Back</button>
+            <button type="submit" class="btn-primary" id="formSubmitBtn" data-i18n="submitForm">Submit & Analyze</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- LOADING -->
+    <section class="view loading" id="view-loading">
+      <div class="loading-inner">
+        <h2 class="load-title"><span data-i18n="analyzing">Analyzing</span> <span id="loadBiz">Restaurant</span> <span data-i18n="business">Business</span></h2>
+        <p class="load-sub" data-i18n="buildingStrategy">Building your strategy</p>
+        <ul class="load-steps" id="loadSteps"></ul>
+      </div>
+    </section>
+
+    <!-- RESULT (Fall-back) -->
+    <section class="view result" id="view-result">
+      <div class="result-inner">
+        <p class="result-eyebrow" data-i18n="analysisComplete">Analysis Complete</p>
+        <h2 class="result-title"><span data-i18n="your">Your</span> <span id="resBiz">Restaurant</span></h2>
+        <p class="result-sub" data-i18n="resultSub">Based on your answers, here is our recommended strategy.</p>
+
+        <div class="stats">
+          <div class="stat"><span class="stat-label" data-i18n="businessScore">Business Score</span><span class="stat-value">87/100</span></div>
+          <div class="stat"><span class="stat-label" data-i18n="growthPotential">Growth Potential</span><span class="stat-value">95%</span></div>
+          <div class="stat"><span class="stat-label" data-i18n="timeline">Timeline</span><span class="stat-value">2-3 weeks</span></div>
+          <div class="stat"><span class="stat-label" data-i18n="investment">Investment</span><span class="stat-value">$8,000 - $25,000</span></div>
+          <div class="stat"><span class="stat-label" data-i18n="roi">ROI Estimate</span><span class="stat-value">3-5x within 6 months</span></div>
+        </div>
+
+        <div class="solution">
+          <h3 data-i18n="recommendedSolution">Recommended Solution</h3>
+          <p id="solutionText">Online ordering platform with delivery integration and customer loyalty system</p>
+          <h4 data-i18n="keyFeatures">Key Features:</h4>
+          <ul class="features" id="featuresList"></ul>
+        </div>
+
+        <button class="cta" id="seeCases">
+          <span data-i18n="seeCases">See how we helped similar businesses</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
