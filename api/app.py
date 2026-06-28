@@ -11,9 +11,15 @@ import html
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
-# Add api directory to path to import ai_analyzer
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from ai_analyzer import analyze_business
+# Add api directory to path to import ai_analyzer (fail-safe for local and Vercel)
+try:
+    from api.ai_analyzer import analyze_business
+except ImportError:
+    try:
+        from ai_analyzer import analyze_business
+    except ImportError:
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from ai_analyzer import analyze_business
 
 app = Flask(__name__)
 CORS(app)
