@@ -26,7 +26,15 @@ const I18N = {
     lblBizEmail: "Email Address (Optional)",
     lblSocials: "Social Media Links (Optional)",
     submitForm: "Submit & Analyze",
-    trackOrder: "Track My Current Order"
+    trackOrder: "Track My Current Order",
+    // Additional fields
+    lblProjectDesc: "Project Description (Optional)",
+    lblBudgetRange: "Budget Range (Optional)",
+    lblPreferredColors: "Preferred Colors (Optional)",
+    lblTargetAudience: "Target Audience (Optional)",
+    lblCompetitors: "Competitors (Optional)",
+    lblHasWebsite: "I already have a website",
+    optSelectBudget: "Select budget..."
   },
   ar: {
     eyebrow: "وكالة منتجات رقمية",
@@ -54,7 +62,15 @@ const I18N = {
     lblBizEmail: "البريد الإلكتروني (اختياري)",
     lblSocials: "حسابات التواصل الاجتماعي (اختياري)",
     submitForm: "إرسال وتحليل",
-    trackOrder: "متابعة طلبي الحالي"
+    trackOrder: "متابعة طلبي الحالي",
+    // Additional fields
+    lblProjectDesc: "وصف المشروع (اختياري)",
+    lblBudgetRange: "ميزانية المشروع (اختياري)",
+    lblPreferredColors: "الألوان المفضلة (اختياري)",
+    lblTargetAudience: "الجمهور المستهدف (اختياري)",
+    lblCompetitors: "المنافسين (اختياري)",
+    lblHasWebsite: "لدي موقع إلكتروني بالفعل",
+    optSelectBudget: "اختر الميزانية المتوقعة..."
   }
 };
 
@@ -298,6 +314,13 @@ businessForm.addEventListener("submit", async (e) => {
       tiktok: document.getElementById("bizTiktok").value.trim(),
       facebook: document.getElementById("bizFacebook").value.trim()
     },
+    project_description: document.getElementById("projectDescription").value.trim(),
+    budget_range: document.getElementById("budgetRange").value,
+    preferred_colors: document.getElementById("preferredColors").value.trim(),
+    target_audience: document.getElementById("targetAudience").value.trim(),
+    competitors: document.getElementById("competitors").value.trim(),
+    has_existing_website: document.getElementById("hasExistingWebsite").checked,
+    existing_website_url: document.getElementById("existingWebsiteUrl").value.trim(),
     answers: QUESTIONS.en.map((q, idx) => {
       const a = state.answers[idx];
       let val;
@@ -380,6 +403,15 @@ function checkExistingOrder() {
 document.addEventListener("DOMContentLoaded", () => {
   setLang("ar"); // Default to Arabic as requested by user
   checkExistingOrder();
+  
+  const hasWebsiteCheckbox = document.getElementById("hasExistingWebsite");
+  const websiteUrlContainer = document.getElementById("existingWebsiteUrlContainer");
+  if (hasWebsiteCheckbox && websiteUrlContainer) {
+    hasWebsiteCheckbox.addEventListener("change", () => {
+      websiteUrlContainer.style.display = hasWebsiteCheckbox.checked ? "block" : "none";
+    });
+  }
+
   if (typeof lucide !== "undefined") {
     lucide.createIcons();
   }

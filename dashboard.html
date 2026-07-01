@@ -96,27 +96,62 @@
               <!-- Inst/Tiktok/Fb icons will be injected -->
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Simulator Card (Collapsible helper for testing) -->
-      <div class="card simulator-card">
-        <div class="card-header" id="simulatorHeader" style="display: flex; gap: 8px; align-items: center; justify-content: space-between;">
-          <h2 class="card-title" data-i18n="simulatorTitle" style="display: flex; align-items: center; gap: 8px;">
-            <i data-lucide="terminal" style="width: 16px; height: 16px;"></i>
-            <span data-i18n="simulatorTitleText">محاكي بوت تيليجرام (للاختبار)</span>
-          </h2>
-          <svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
-        <div class="card-content simulator-content" id="simulatorContent">
-          <p class="sim-text" data-i18n="simulatorText">يمكنك محاكاة نقرات بوت التيليجرام لتغيير حالة الطلب في قاعدة البيانات ورؤية التحديث فوراً أمام العميل:</p>
-          <div class="sim-buttons">
-            <button class="btn-sim approve" onclick="simulateTelegramAction('approved')">تأكيد الطلب</button>
-            <button class="btn-sim reject" onclick="simulateTelegramAction('rejected')">رفض الطلب</button>
-            <button class="btn-sim suspend" onclick="simulateTelegramAction('suspended')">تعليق الطلب</button>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblProjectDesc">وصف المشروع</span>
+            <span class="info-val" id="infoProjectDesc" style="font-size: 13px; line-height: 1.4; display: block; margin-top: 4px; white-space: pre-wrap;">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblBudgetRange">الميزانية</span>
+            <span class="info-val" id="infoBudget">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblPreferredColors">الألوان المفضلة</span>
+            <span class="info-val" id="infoColors">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblTargetAudience">الجمهور المستهدف</span>
+            <span class="info-val" id="infoAudience">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblCompetitors">المنافسين</span>
+            <span class="info-val" id="infoCompetitors">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblHasWebsite">الموقع الحالي</span>
+            <span class="info-val" id="infoWebsite">-</span>
           </div>
         </div>
       </div>
+
+      <!-- Cost & Dev Status Card -->
+      <div class="card status-details-card">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="costDevDetails">تفاصيل التنفيذ والتكلفة</h2>
+        </div>
+        <div class="card-content info-list">
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblDeveloper">المطور المسؤول</span>
+            <span class="info-val" id="infoDeveloper" style="font-weight: 600; color: hsl(var(--primary));">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblCost">التكلفة الإجمالية</span>
+            <span class="info-val" id="infoCost" style="font-weight: 600; color: hsl(var(--primary));">-</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label" data-i18n="lblPaymentStatus">حالة الدفع</span>
+            <span class="info-val" id="infoPaymentStatus" style="font-weight: 600;">-</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Error Screen View -->
+    <div id="errorView" style="display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; text-align: center; padding: 48px 24px; max-width: 500px; margin: 0 auto; gap: 20px;">
+      <i data-lucide="shield-alert" style="width: 64px; height: 64px; color: hsl(var(--destructive));"></i>
+      <h2 style="font-size: 26px; font-weight: 700; font-family: 'Cairo', sans-serif;" data-i18n="errOrderNotFound">الطلب غير متوفر</h2>
+      <p style="color: hsl(var(--muted-foreground)); font-size: 16px; line-height: 1.6;" data-i18n="errOrderNotFoundDesc">عذراً، هذا الطلب غير موجود في النظام أو تم حذفه نهائياً من قبل الإدارة.</p>
+      <a href="/" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 24px; border-radius: 8px;" data-i18n="backToHomeText">الرجوع للرئيسية</a>
     </div>
 
     <!-- Right Column: AI Analysis details -->

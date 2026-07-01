@@ -11,8 +11,6 @@ const I18N = {
     lblPhone: "Phone",
     lblEmail: "Email",
     lblSocials: "Social Media",
-    simulatorTitle: "🛠️ Telegram Bot Simulator (Testing)",
-    simulatorText: "You can simulate the Telegram bot actions to update the order status in real-time:",
     businessScore: "Business Score",
     growthPotential: "Growth Potential",
     aiRecommendation: "AI Recommendation Strategy",
@@ -32,7 +30,23 @@ const I18N = {
     status_rejected: "Rejected",
     desc_rejected: "This order has been rejected. Please check your phone or email for details or reach out to support.",
     status_suspended: "On Hold",
-    desc_suspended: "This order is currently suspended/on hold. We might need extra details to proceed."
+    desc_suspended: "This order is currently suspended/on hold. We might need extra details to proceed.",
+    // New specs translations
+    lblProjectDesc: "Project Description",
+    lblBudgetRange: "Budget",
+    lblPreferredColors: "Preferred Colors",
+    lblTargetAudience: "Target Audience",
+    lblCompetitors: "Competitors",
+    lblHasWebsite: "Current Website",
+    costDevDetails: "Implementation & Cost details",
+    lblDeveloper: "Assigned Developer",
+    lblCost: "Total Cost",
+    lblPaymentStatus: "Payment Status",
+    errOrderNotFound: "Order Not Found",
+    errOrderNotFoundDesc: "Sorry, this order is not available in the system or has been deleted by administration.",
+    optNoWebsite: "None",
+    pay_unpaid: "❌ Unpaid / العربون مستحق",
+    pay_paid: "✅ Paid"
   },
   ar: {
     dashboardTitle: "تحليل النشاط التجاري - لوحة التحكم",
@@ -45,8 +59,6 @@ const I18N = {
     lblPhone: "رقم الهاتف",
     lblEmail: "البريد الإلكتروني",
     lblSocials: "وسائل التواصل",
-    simulatorTitle: "🛠️ محاكي بوت تيليجرام (للاختبار)",
-    simulatorText: "يمكنك محاكاة نقرات بوت التيليجرام لتغيير حالة الطلب في قاعدة البيانات ورؤية التحديث فوراً أمام العميل:",
     businessScore: "تقييم النشاط التجاري",
     growthPotential: "إمكانية النمو",
     aiRecommendation: "توصية الذكاء الاصطناعي",
@@ -66,7 +78,23 @@ const I18N = {
     status_rejected: "تم رفض الطلب",
     desc_rejected: "تم رفض هذا الطلب. يرجى مراجعة بريدك الإلكتروني أو الاتصال بالدعم لمعرفة الأسباب.",
     status_suspended: "معلق مؤقتاً",
-    desc_suspended: "تم تعليق طلبك مؤقتاً. ربما نحتاج إلى معلومات إضافية لتفعيل الطلب."
+    desc_suspended: "تم تعليق طلبك مؤقتاً. ربما نحتاج إلى معلومات إضافية لتفعيل الطلب.",
+    // New specs translations
+    lblProjectDesc: "وصف المشروع",
+    lblBudgetRange: "الميزانية",
+    lblPreferredColors: "الألوان المفضلة",
+    lblTargetAudience: "الجمهور المستهدف",
+    lblCompetitors: "المنافسين",
+    lblHasWebsite: "الموقع الحالي",
+    costDevDetails: "تفاصيل التنفيذ والتكلفة",
+    lblDeveloper: "المطور المسؤول",
+    lblCost: "التكلفة الإجمالية",
+    lblPaymentStatus: "حالة الدفع",
+    errOrderNotFound: "الطلب غير متوفر",
+    errOrderNotFoundDesc: "عذراً، هذا الطلب غير موجود في النظام أو تم حذفه نهائياً من قبل الإدارة.",
+    optNoWebsite: "لا يوجد",
+    pay_unpaid: "❌ لم يتم دفع العربون",
+    pay_paid: "✅ تم تأكيد الدفع والبدء بالعمل"
   }
 };
 
@@ -149,11 +177,35 @@ async function fetchOrder() {
         orderData = data.order;
         updateStatusWidget(orderData.status);
         
+        // Hide error and show container in case it was toggled
+        document.querySelector(".dash-container").style.display = "grid";
+        document.getElementById("errorView").style.display = "none";
+
         // Only render the static data once on load, to prevent layout flashing
         if (!document.getElementById("infoName").textContent || document.getElementById("infoName").textContent === "-") {
           renderOrderInfo();
           renderAnalysisData();
+        } else {
+          // Keep updating Cost, Dev, and Payment Status dynamically
+          document.getElementById("infoDeveloper").textContent = orderData.developer || "-";
+          document.getElementById("infoCost").textContent = orderData.cost || "-";
+          
+          const payEl = document.getElementById("infoPaymentStatus");
+          if (orderData.payment_status === "paid") {
+            payEl.textContent = I18N[currentLang].pay_paid;
+            payEl.style.color = "hsl(var(--status-approved-fg))";
+          } else {
+            payEl.textContent = I18N[currentLang].pay_unpaid;
+            payEl.style.color = "hsl(var(--status-rejected-fg))";
+          }
         }
+      }
+    } else {
+      // Order not found or deleted
+      document.querySelector(".dash-container").style.display = "none";
+      document.getElementById("errorView").style.display = "flex";
+      if (typeof lucide !== "undefined") {
+        lucide.createIcons();
       }
     }
   } catch (err) {
@@ -203,27 +255,51 @@ function renderOrderInfo() {
   // Social links formatting
   const socials = orderData.socials || {};
   const socContainer = document.getElementById("infoSocials");
-  socContainer.innerHTML = "";
+  if (socContainer) {
+    socContainer.innerHTML = "";
+    if (socials.instagram) {
+      const link = socials.instagram.startsWith("http") ? socials.instagram : `https://instagram.com/${socials.instagram}`;
+      socContainer.innerHTML += `<a href="${link}" target="_blank" class="social-badge" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>Instagram</a>`;
+    }
+    if (socials.tiktok) {
+      const link = socials.tiktok.startsWith("http") ? socials.tiktok : `https://tiktok.com/@${socials.tiktok}`;
+      socContainer.innerHTML += `<a href="${link}" target="_blank" class="social-badge" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/></svg>TikTok</a>`;
+    }
+    if (socials.facebook) {
+      const link = socials.facebook.startsWith("http") ? socials.facebook : `https://facebook.com/${socials.facebook}`;
+      socContainer.innerHTML += `<a href="${link}" target="_blank" class="social-badge" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>Facebook</a>`;
+    }
+    
+    if (socContainer.innerHTML === "") {
+      socContainer.innerHTML = `<span style="color: var(--muted-foreground)">-</span>`;
+    }
+  }
+
+  // Populate new details
+  document.getElementById("infoProjectDesc").textContent = orderData.project_description || "-";
+  document.getElementById("infoBudget").textContent = orderData.budget_range || "-";
+  document.getElementById("infoColors").textContent = orderData.preferred_colors || "-";
+  document.getElementById("infoAudience").textContent = orderData.target_audience || "-";
+  document.getElementById("infoCompetitors").textContent = orderData.competitors || "-";
   
-  if (socials.instagram) {
-    const link = socials.instagram.startsWith("http") ? socials.instagram : `https://instagram.com/${socials.instagram}`;
-    socContainer.innerHTML += `<a href="${link}" target="_blank" class="social-badge" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>Instagram</a>`;
+  const webEl = document.getElementById("infoWebsite");
+  if (orderData.has_existing_website && orderData.existing_website_url) {
+    webEl.innerHTML = `<a href="${orderData.existing_website_url}" target="_blank" style="color: hsl(var(--primary)); text-decoration: underline; word-break: break-all;">${orderData.existing_website_url}</a>`;
+  } else {
+    webEl.textContent = I18N[currentLang].optNoWebsite;
   }
-  if (socials.tiktok) {
-    const link = socials.tiktok.startsWith("http") ? socials.tiktok : `https://tiktok.com/@${socials.tiktok}`;
-    socContainer.innerHTML += `<a href="${link}" target="_blank" class="social-badge" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/></svg>TikTok</a>`;
-  }
-  if (socials.facebook) {
-    const link = socials.facebook.startsWith("http") ? socials.facebook : `https://facebook.com/${socials.facebook}`;
-    socContainer.innerHTML += `<a href="${link}" target="_blank" class="social-badge" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>Facebook</a>`;
-  }
+
+  // Cost, dev, payment
+  document.getElementById("infoDeveloper").textContent = orderData.developer || "-";
+  document.getElementById("infoCost").textContent = orderData.cost || "-";
   
-  if (socContainer.innerHTML === "") {
-    socContainer.innerHTML = `<span style="color: var(--muted-foreground)">-</span>`;
-  }
-  
-  if (typeof lucide !== "undefined") {
-    lucide.createIcons();
+  const payEl = document.getElementById("infoPaymentStatus");
+  if (orderData.payment_status === "paid") {
+    payEl.textContent = I18N[currentLang].pay_paid;
+    payEl.style.color = "hsl(var(--status-approved-fg))";
+  } else {
+    payEl.textContent = I18N[currentLang].pay_unpaid;
+    payEl.style.color = "hsl(var(--status-rejected-fg))";
   }
 }
 
@@ -322,25 +398,6 @@ function populateList(elementId, itemsArray) {
   });
 }
 
-// Simulator Call
-async function simulateTelegramAction(status) {
-  if (!orderId) return;
-  try {
-    const res = await fetch(`/api/order/${orderId}/update-status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      // Fetch latest order details immediately to update UI
-      fetchOrder();
-    }
-  } catch (err) {
-    console.error("Simulation request failed:", err);
-  }
-}
-
 // Initialize Dashboard
 document.addEventListener("DOMContentLoaded", () => {
   orderId = getOrderIdFromUrl();
@@ -351,7 +408,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   initTheme();
-  initSimulatorCollapse();
   setLanguage("ar"); // Default to Arabic
   
   // Fetch initial details
