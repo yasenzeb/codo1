@@ -310,14 +310,17 @@ function renderAnalysisData() {
   const analysis = orderData.analysis;
   
   // Brand title
-  document.getElementById("brandTitle").textContent = `${orderData.business_name} - AI Dashboard`;
+  document.getElementById("brandTitle").textContent = `${orderData.business_name || ""} - AI Dashboard`;
   
   // Metrics progress bar animation
-  document.getElementById("valScore").textContent = `${analysis.score}/100`;
-  document.getElementById("scoreBar").style.width = `${analysis.score}%`;
+  const score = analysis.score || 75;
+  const growth = analysis.growth_potential || 75;
   
-  document.getElementById("valGrowth").textContent = `${analysis.growth_potential}%`;
-  document.getElementById("growthBar").style.width = `${analysis.growth_potential}%`;
+  document.getElementById("valScore").textContent = `${score}/100`;
+  document.getElementById("scoreBar").style.width = `${score}%`;
+  
+  document.getElementById("valGrowth").textContent = `${growth}%`;
+  document.getElementById("growthBar").style.width = `${growth}%`;
   
   // Solution Header & Summary
   const solText = orderData.business_type === "Restaurant" || orderData.business_type === "مطعم"
@@ -325,10 +328,11 @@ function renderAnalysisData() {
     : (currentLang === "ar" ? "منصة نمو رقمي وتجربة عملاء مخصصة" : "Automated digital growth platform");
   
   document.getElementById("solutionTitle").textContent = solText;
-  document.getElementById("aiSummary").textContent = analysis.ai_summary[currentLang];
+  
+  const summaryText = (analysis.ai_summary && analysis.ai_summary[currentLang]) ? analysis.ai_summary[currentLang] : (analysis.ai_summary || "-");
+  document.getElementById("aiSummary").textContent = summaryText;
   
   // Key Features
-  const features = analysis.swot[currentLang].opportunities.slice(0, 4); // fallbacks
   const featsList = document.getElementById("featuresList");
   featsList.innerHTML = "";
   
@@ -357,33 +361,37 @@ function renderAnalysisData() {
   });
   
   // SWOT List
-  const swot = analysis.swot[currentLang];
-  populateList("swotStrengthsList", swot.strengths);
-  populateList("swotWeaknessesList", swot.weaknesses);
-  populateList("swotOpportunitiesList", swot.opportunities);
-  populateList("swotThreatsList", swot.threats);
+  const swot = (analysis.swot && analysis.swot[currentLang]) ? analysis.swot[currentLang] : { strengths: [], weaknesses: [], opportunities: [], threats: [] };
+  populateList("swotStrengthsList", swot.strengths || []);
+  populateList("swotWeaknessesList", swot.weaknesses || []);
+  populateList("swotOpportunitiesList", swot.opportunities || []);
+  populateList("swotThreatsList", swot.threats || []);
   
   // Action Roadmap
-  const roadmap = analysis.action_plan[currentLang];
+  const roadmap = (analysis.action_plan && analysis.action_plan[currentLang]) ? analysis.action_plan[currentLang] : [];
   const roadmapContainer = document.getElementById("actionPlanList");
   roadmapContainer.innerHTML = "";
   
-  roadmap.forEach((step, idx) => {
-    const title = step.split(" - ")[0] || `Step ${idx+1}`;
-    const desc = step.split(" - ")[1] || step;
-    
-    roadmapContainer.innerHTML += `
-      <div class="roadmap-item">
-        <div class="roadmap-dot"></div>
-        <div class="roadmap-title">${title}</div>
-        <div class="roadmap-desc">${desc}</div>
-      </div>
-    `;
-  });
+  if (Array.isArray(roadmap)) {
+    roadmap.forEach((step, idx) => {
+      const title = step.split(" - ")[0] || `Step ${idx+1}`;
+      const desc = step.split(" - ")[1] || step;
+      
+      roadmapContainer.innerHTML += `
+        <div class="roadmap-item">
+          <div class="roadmap-dot"></div>
+          <div class="roadmap-title">${title}</div>
+          <div class="roadmap-desc">${desc}</div>
+        </div>
+      `;
+    });
+  }
   
   // Marketing & SEO
-  populateList("marketingPlanList", analysis.marketing_plan[currentLang]);
-  populateList("seoTipsList", analysis.seo_tips[currentLang]);
+  const marketing = (analysis.marketing_plan && analysis.marketing_plan[currentLang]) ? analysis.marketing_plan[currentLang] : [];
+  const seo = (analysis.seo_tips && analysis.seo_tips[currentLang]) ? analysis.seo_tips[currentLang] : [];
+  populateList("marketingPlanList", Array.isArray(marketing) ? marketing : []);
+  populateList("seoTipsList", Array.isArray(seo) ? seo : []);
   
   if (typeof lucide !== "undefined") {
     lucide.createIcons();
