@@ -315,7 +315,7 @@ businessForm.addEventListener("submit", async (e) => {
       facebook: document.getElementById("bizFacebook").value.trim()
     },
     project_description: document.getElementById("projectDescription").value.trim(),
-    budget_range: document.getElementById("budgetRange").value,
+    budget_range: document.getElementById("budgetRange").value.trim(),
     preferred_colors: document.getElementById("preferredColors").value.trim(),
     target_audience: document.getElementById("targetAudience").value.trim(),
     competitors: document.getElementById("competitors").value.trim(),

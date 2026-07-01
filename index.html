@@ -98,14 +98,11 @@
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: start;">
-              <label style="font-size: 14px; font-weight: 500;" data-i18n="lblBudgetRange">Budget Range (Optional)</label>
-              <select id="budgetRange" style="width:100%; height:44px; padding:0 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--fg); font-family:inherit; font-size:15px; outline: none; cursor: pointer;">
-                <option value="غير محدد" selected data-i18n="optSelectBudget">Select budget...</option>
-                <option value="2k-5k EGP">2,000 - 5,000 EGP</option>
-                <option value="5k-10k EGP">5,000 - 10,000 EGP</option>
-                <option value="10k-20k EGP">10,000 - 20,000 EGP</option>
-                <option value="20k+ EGP">20,000+ EGP</option>
-              </select>
+              <label style="font-size: 14px; font-weight: 500;">
+                <span data-i18n="lblBudgetRange">Budget Range</span>
+                <span style="color: hsl(var(--destructive));">*</span>
+              </label>
+              <input type="text" id="budgetRange" required style="width:100%; height:44px; padding:0 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--fg); font-family:inherit; font-size:15px; outline: none;" placeholder="e.g. 5000 EGP" />
             </div>
 
             <div class="form-group" style="display: flex; flex-direction: column; gap: 6px; text-align: start;">

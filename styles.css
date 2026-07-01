@@ -54,14 +54,15 @@ html[dir="rtl"] .lang-switch{right:auto;left:24px}
 
 .cta{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  height:56px;padding:0 32px;font-size:16px;font-weight:500;
-  background:var(--primary);color:var(--primary-fg);
-  border:0;border-radius:10px;cursor:pointer;
-  transition:opacity .2s,transform .2s;
+  height:56px;padding:0 32px;font-size:16px;font-weight:600;
+  background:linear-gradient(135deg, var(--primary), #333);color:var(--primary-fg);
+  border:0;border-radius:12px;cursor:pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+  transition:all .3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.cta:hover{opacity:.9}
-.cta:active{transform:scale(.98)}
-.cta svg{transition:transform .2s}
+.cta:hover{opacity:.95; transform:translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15);}
+.cta:active{transform:translateY(0) scale(.98); box-shadow: 0 2px 8px rgba(0,0,0,0.1);}
+.cta svg{transition:transform .3s ease}
 .cta:hover svg{transform:translateX(3px)}
 html[dir="rtl"] .cta:hover svg{transform:translateX(-3px) rotate(180deg)}
 html[dir="rtl"] .cta svg{transform:rotate(180deg)}
@@ -79,10 +80,10 @@ html[dir="rtl"] .cta svg{transform:rotate(180deg)}
   padding:18px 20px;text-align:start;
   background:var(--card);border:1px solid var(--border);
   border-radius:var(--radius);font-size:15px;font-weight:500;
-  color:var(--fg);cursor:pointer;transition:all .15s;
+  color:var(--fg);cursor:pointer;transition:all .2s ease;
 }
-.option:hover{border-color:var(--fg)}
-.option.selected{background:var(--fg);color:var(--primary-fg);border-color:var(--fg)}
+.option:hover{border-color:var(--fg); transform:translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.05);}
+.option.selected{background:var(--fg);color:var(--primary-fg);border-color:var(--fg); box-shadow: 0 4px 12px rgba(0,0,0,0.1);}
 .quiz-actions{display:flex;justify-content:space-between;gap:12px}
 .btn-primary,.btn-secondary{
   height:44px;padding:0 22px;font-size:14px;font-weight:500;

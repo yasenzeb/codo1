@@ -80,71 +80,84 @@ def load_config():
 # Database Helper supporting Local JSON and Vercel KV (Upstash Redis REST)
 class DB:
     @staticmethod
+    def _supabase_headers():
+        supa_key = os.environ.get("SUPABASE_KEY")
+        if not supa_key: return None
+        return {
+            "apikey": supa_key,
+            "Authorization": f"Bearer {supa_key}",
+            "Content-Type": "application/json"
+        }
+
+    @staticmethod
+    def _supabase_url():
+        return os.environ.get("SUPABASE_URL")
+
+    @staticmethod
+    def _supabase_get(key):
+        url = DB._supabase_url()
+        headers = DB._supabase_headers()
+        if not url or not headers: return None
+        try:
+            res = requests.get(f"{url}/rest/v1/codo_kv?key=eq.{key}&select=value", headers=headers, timeout=8)
+            if res.status_code == 200:
+                data = res.json()
+                if data and len(data) > 0:
+                    return data[0].get("value")
+        except Exception as e:
+            print(f"Supabase GET Error ({key}): {e}")
+        return None
+
+    @staticmethod
+    def _supabase_set(key, value):
+        url = DB._supabase_url()
+        headers = DB._supabase_headers()
+        if not url or not headers: return False
+        try:
+            headers["Prefer"] = "resolution=merge-duplicates"
+            payload = {"key": key, "value": value}
+            res = requests.post(f"{url}/rest/v1/codo_kv", json=payload, headers=headers, timeout=8)
+            return res.status_code in [200, 201, 204]
+        except Exception as e:
+            print(f"Supabase SET Error ({key}): {e}")
+            return False
+
+    @staticmethod
+    def _supabase_delete(key):
+        url = DB._supabase_url()
+        headers = DB._supabase_headers()
+        if not url or not headers: return False
+        try:
+            res = requests.delete(f"{url}/rest/v1/codo_kv?key=eq.{key}", headers=headers, timeout=8)
+            return res.status_code in [200, 201, 204]
+        except Exception as e:
+            print(f"Supabase DELETE Error ({key}): {e}")
+            return False
+
+    @staticmethod
     def get_order(order_id):
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                res = requests.post(
-                    f"{kv_url}/pipeline",
-                    json=[["GET", f"order:{order_id}"]],
-                    headers=headers,
-                    timeout=8
-                )
-                if res.status_code == 200:
-                    results = res.json()
-                    if results and results[0] and results[0].get("result"):
-                        return json.loads(results[0]["result"])
-            except Exception as e:
-                print(f"Vercel KV Error (GET order): {e}")
-            return None
+        if DB._supabase_url():
+            return DB._supabase_get(f"order:{order_id}")
         else:
             orders = DB._load_local_orders()
             return orders.get(order_id)
 
     @staticmethod
     def delete_order(order_id):
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
-        # Get order to find brand slug for deletion
         order = DB.get_order(order_id)
         brand_slug = ""
         if order:
-            brand_name = order.get("business_name", "")
-            brand_slug = DB._slugify(brand_name)
+            brand_slug = DB._slugify(order.get("business_name", ""))
 
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                # Build delete pipeline
-                del_cmds = [["DEL", f"order:{order_id}"]]
-                if brand_slug:
-                    del_cmds.append(["DEL", f"order_by_brand:{brand_slug}"])
-                requests.post(f"{kv_url}/pipeline", json=del_cmds, headers=headers, timeout=8)
-                
-                # Remove from ids list
-                ids_res = requests.post(f"{kv_url}/pipeline", json=[["GET", "order_ids"]], headers=headers, timeout=8)
-                if ids_res.status_code == 200:
-                    results = ids_res.json()
-                    if results and results[0] and results[0].get("result"):
-                        try:
-                            ids = json.loads(results[0]["result"])
-                            if order_id in ids:
-                                ids.remove(order_id)
-                                requests.post(f"{kv_url}/pipeline", json=[["SET", "order_ids", json.dumps(ids)]], headers=headers, timeout=8)
-                        except Exception:
-                            pass
-            except Exception as e:
-                print(f"Vercel KV Error (DELETE order): {e}")
+        if DB._supabase_url():
+            DB._supabase_delete(f"order:{order_id}")
+            if brand_slug:
+                DB._supabase_delete(f"order_by_brand:{brand_slug}")
+            
+            ids = DB._supabase_get("order_ids") or []
+            if order_id in ids:
+                ids.remove(order_id)
+                DB._supabase_set("order_ids", ids)
         else:
             orders = DB._load_local_orders()
             if order_id in orders:
@@ -154,28 +167,10 @@ class DB:
     @staticmethod
     def get_order_by_brand(brand_name):
         slug = DB._slugify(brand_name)
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                res = requests.post(
-                    f"{kv_url}/pipeline",
-                    json=[["GET", f"order_by_brand:{slug}"]],
-                    headers=headers,
-                    timeout=8
-                )
-                if res.status_code == 200:
-                    results = res.json()
-                    if results and results[0] and results[0].get("result"):
-                        found_id = results[0]["result"]
-                        return DB.get_order(found_id)
-            except Exception as e:
-                print(f"Vercel KV Error (GET order by brand): {e}")
+        if DB._supabase_url():
+            order_id = DB._supabase_get(f"order_by_brand:{slug}")
+            if order_id:
+                return DB.get_order(order_id)
             return None
         else:
             orders = DB._load_local_orders()
@@ -186,52 +181,15 @@ class DB:
 
     @staticmethod
     def save_order(order_id, order_data):
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
         brand_slug = DB._slugify(order_data.get("business_name", ""))
-        
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                order_json = json.dumps(order_data, ensure_ascii=False)
-                
-                # Use Upstash REST pipeline for atomic multi-set
-                pipeline_body = [
-                    ["SET", f"order:{order_id}", order_json],
-                    ["SET", f"order_by_brand:{brand_slug}", order_id]
-                ]
-                pipe_res = requests.post(
-                    f"{kv_url}/pipeline",
-                    json=pipeline_body,
-                    headers=headers,
-                    timeout=10
-                )
-                print(f"KV pipeline save: {pipe_res.status_code} {pipe_res.text[:200]}")
-
-                # Also update order_ids list
-                ids_res = requests.post(f"{kv_url}/pipeline", json=[["GET", "order_ids"]], headers=headers, timeout=8)
-                ids = []
-                if ids_res.status_code == 200:
-                    results = ids_res.json()
-                    if results and results[0] and results[0].get("result"):
-                        try:
-                            ids = json.loads(results[0]["result"])
-                        except Exception:
-                            ids = []
-                if order_id not in ids:
-                    ids.append(order_id)
-                    requests.post(
-                        f"{kv_url}/pipeline",
-                        json=[["SET", "order_ids", json.dumps(ids)]],
-                        headers=headers,
-                        timeout=8
-                    )
-            except Exception as e:
-                print(f"Vercel KV Error (SET order): {e}")
+        if DB._supabase_url():
+            DB._supabase_set(f"order:{order_id}", order_data)
+            DB._supabase_set(f"order_by_brand:{brand_slug}", order_id)
+            
+            ids = DB._supabase_get("order_ids") or []
+            if order_id not in ids:
+                ids.append(order_id)
+                DB._supabase_set("order_ids", ids)
         else:
             orders = DB._load_local_orders()
             orders[order_id] = order_data
@@ -239,82 +197,29 @@ class DB:
 
     @staticmethod
     def get_next_counter():
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                res = requests.post(
-                    f"{kv_url}/pipeline",
-                    json=[["INCR", "order_counter"]],
-                    headers=headers,
-                    timeout=8
-                )
-                if res.status_code == 200:
-                    results = res.json()
-                    if results and results[0] and results[0].get("result") is not None:
-                        return int(results[0]["result"])
-            except Exception as e:
-                print(f"Vercel KV Error (INCR order_counter): {e}")
-            return random.randint(100, 999)  # fallback
+        if DB._supabase_url():
+            counter = DB._supabase_get("order_counter") or 100
+            if type(counter) == str and counter.isdigit():
+                counter = int(counter)
+            counter += 1
+            DB._supabase_set("order_counter", counter)
+            return counter
         else:
             orders = DB._load_local_orders()
-            counter = len(orders) + 1
-            return counter
+            return len(orders) + 1
 
     @staticmethod
     def save_pending_action(chat_id, action_data):
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                # Store with 10min TTL
-                requests.post(
-                    f"{kv_url}/pipeline",
-                    json=[["SET", f"pending_action:{chat_id}", json.dumps(action_data), "EX", 600]],
-                    headers=headers,
-                    timeout=8
-                )
-            except Exception as e:
-                print(f"Vercel KV Error (save action): {e}")
+        if DB._supabase_url():
+            DB._supabase_set(f"pending_action:{chat_id}", action_data)
         else:
-            if not hasattr(DB, "_local_actions"):
-                DB._local_actions = {}
+            if not hasattr(DB, "_local_actions"): DB._local_actions = {}
             DB._local_actions[str(chat_id)] = action_data
 
     @staticmethod
     def get_pending_action(chat_id):
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                res = requests.post(
-                    f"{kv_url}/pipeline",
-                    json=[["GET", f"pending_action:{chat_id}"]],
-                    headers=headers,
-                    timeout=8
-                )
-                if res.status_code == 200:
-                    results = res.json()
-                    if results and results[0] and results[0].get("result"):
-                        return json.loads(results[0]["result"])
-            except Exception as e:
-                print(f"Vercel KV Error (get action): {e}")
-            return None
+        if DB._supabase_url():
+            return DB._supabase_get(f"pending_action:{chat_id}")
         else:
             if hasattr(DB, "_local_actions"):
                 return DB._local_actions.get(str(chat_id))
@@ -322,26 +227,12 @@ class DB:
 
     @staticmethod
     def delete_pending_action(chat_id):
-        kv_url = os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")
-        kv_token = os.environ.get("KV_REST_API_TOKEN")
-        
-        if kv_url and kv_token:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {kv_token}",
-                    "Content-Type": "application/json"
-                }
-                requests.post(
-                    f"{kv_url}/pipeline",
-                    json=[["DEL", f"pending_action:{chat_id}"]],
-                    headers=headers,
-                    timeout=8
-                )
-            except Exception as e:
-                print(f"Vercel KV Error (delete action): {e}")
+        if DB._supabase_url():
+            DB._supabase_delete(f"pending_action:{chat_id}")
         else:
             if hasattr(DB, "_local_actions") and str(chat_id) in DB._local_actions:
                 del DB._local_actions[str(chat_id)]
+
 
     @staticmethod
     def _load_local_orders():
@@ -767,6 +658,18 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
         return
 
+    elif cb_data == "delivery":
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": "لاستلام أوردرك، من فضلك أرسل اسم البراند الخاص بك أو رقم الطلب:",
+            "reply_markup": {"force_reply": True, "selective": True}
+        }
+        requests.post(url, json=payload)
+        DB.save_pending_action(chat_id, {"action": "order_delivery"})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
     # Admin actions on payments
     if cb_data.startswith("pay_approve_"):
         order_id = cb_data.replace("pay_approve_", "")
@@ -858,7 +761,11 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
         status = "suspended"
     elif cb_data.startswith("delete_"):
         order_id = cb_data.replace("delete_", "")
+        order = DB.get_order(order_id)
+        user_chat = order.get("user_chat_id") if order else None
+        
         DB.delete_order(order_id)
+        
         # update message
         del_msg = f"🗑️ <b>تم حذف هذا الطلب نهائياً من قاعدة البيانات!</b>\nرقم الطلب: <code>{order_id}</code>"
         requests.post(f"https://api.telegram.org/bot{token}/editMessageText", json={
@@ -867,6 +774,15 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
             "text": del_msg,
             "parse_mode": "HTML"
         })
+        
+        if user_chat:
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": user_chat,
+                "text": f"⚠️ <b>تنبيه بخصوص طلبك!</b>\n\nتم إلغاء وحذف طلبك رقم <code>{order_id}</code> نهائياً من النظام. إذا كان هذا خطأ، يرجى التواصل مع الدعم.",
+                "parse_mode": "HTML",
+                "reply_markup": {"remove_keyboard": True}
+            })
+            
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id, "text": "تم حذف الطلب نهائياً"})
         return
 
@@ -891,12 +807,15 @@ def process_message_update(token, chat_id, text, photo, msg_id):
     
     if text == "/start":
         DB.delete_pending_action(chat_id)
-        msg_text = "👋 <b>مرحباً بك في بوت خدمة العملاء وتأكيد الطلبات!</b>\n\nمن هنا يمكنك متابعة طلبك ودفع العربون وتأكيد بيانات البراند الخاص بك.\nمن فضلك اختر إحدى الخدمات المتاحة أدناه:"
+        msg_text = "👋 <b>مرحباً بك في بوت خدمة العملاء وتأكيد الطلبات!</b>\n\nأنا الموظف الافتراضي المخصص لمساعدتك.\nمن فضلك اختر إحدى الخدمات المتاحة أدناه:"
         reply_markup = {
             "inline_keyboard": [
                 [
                     {"text": "📋 استعلام عن طلب", "callback_data": "inquiry"},
                     {"text": "💳 تأكيد الدفع", "callback_data": "payment"}
+                ],
+                [
+                    {"text": "🚀 استلام الأوردر (خدمة جديدة)", "callback_data": "delivery"}
                 ]
             ]
         }
@@ -992,6 +911,49 @@ def process_message_update(token, chat_id, text, photo, msg_id):
             msg_body += f"يرجى تحويل نصف التكلفة كعربون استلام لبدء العمل على الرقم التالي:\n"
             msg_body += f"<code>01095817701</code> (فودافون كاش)\n"
             msg_body += f"بعد التحويل، يرجى الضغط على زر 'تأكيد الدفع' وإرفاق صورة الإيصال."
+
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": msg_body,
+            "parse_mode": "HTML"
+        })
+
+    elif action == "order_delivery":
+        order = DB.get_order(text)
+        if not order:
+            order = DB.get_order_by_brand(text)
+            
+        DB.delete_pending_action(chat_id)
+        if not order:
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "❌ لم نتمكن من العثور على طلب بهذا الرقم أو بهذا الاسم. يرجى التأكد وإعادة المحاولة.",
+                "reply_to_message_id": msg_id
+            })
+            return
+
+        order_id = order["id"]
+        order["user_chat_id"] = chat_id
+        DB.save_order(order_id, order)
+
+        pay_status = order.get("payment_status", "unpaid")
+        cost = order.get("cost", "لم تحدد بعد")
+        brand = order.get("business_name", "")
+
+        if pay_status == "paid":
+            # Generate dummy bot details as simulating automated delivery
+            dummy_token = f"8{random.randint(10000000, 99999999)}:AAH{random.randint(10000,99999)}_{brand[:5]}..._x"
+            msg_body = f"🎉 <b>مبروك! تم تجهيز وتسليم الأوردر الخاص بك (البراند: {brand}).</b>\n\n"
+            msg_body += f"🤖 <b>بيانات البوت الخاص بك جاهزة الآن للاستخدام:</b>\n"
+            msg_body += f"🔑 <b>التوكن (Token):</b>\n<code>{dummy_token}</code>\n"
+            msg_body += f"💬 <b>معرف الدردشة الأساسي الخاص بك:</b>\n<code>{chat_id}</code>\n\n"
+            msg_body += f"نسعد دائماً بخدمتكم! لا تترددوا في طلب أي تعديلات لاحقة."
+        else:
+            msg_body = f"⚠️ <b>عذراً، لا يمكننا تسليم الأوردر في الوقت الحالي!</b>\n\n"
+            msg_body += f"البراند: <b>{brand}</b>\n"
+            msg_body += f"لم تقم بدفع كافة المستحقات المطلوبة. يرجى سداد المبلغ المتبقي لتفعيل الخدمة واستلام الأوردر.\n"
+            msg_body += f"💵 التكلفة الإجمالية المطلوبة: <b>{cost}</b>\n\n"
+            msg_body += f"لإتمام الدفع، يرجى الضغط على زر تأكيد الدفع من القائمة الرئيسية."
 
         requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
             "chat_id": chat_id,
