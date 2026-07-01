@@ -569,6 +569,9 @@ def send_telegram_notification(order):
                 {"text": "👨‍💻 تعيين مطور", "callback_data": f"setdev_{order_id}"}
             ],
             [
+                {"text": "🤖 إرفاق توكن تسليم (للتسليم)", "callback_data": f"settoken_{order_id}"}
+            ],
+            [
                 {"text": "🗑️ حذف الطلب نهائياً", "callback_data": f"delete_{order_id}"}
             ]
         ]
@@ -670,6 +673,48 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
         return
 
+    elif cb_data == "consultation":
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": "💡 ممتاز! اترك لنا رقم هاتفك وسيقوم أحد خبرائنا بالتواصل معك في أقرب وقت لتقديم استشارة مجانية حول نشاطك:",
+            "reply_markup": {"force_reply": True, "selective": True}
+        }
+        requests.post(url, json=payload)
+        DB.save_pending_action(chat_id, {"action": "free_consultation"})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
+    elif cb_data == "pricing":
+        msg = "📚 <b>دليل الخدمات والأسعار:</b>\n\n"
+        msg += "1️⃣ <b>بناء الهوية الرقمية (Starter):</b> يبدأ من 2,000 ج.م\n"
+        msg += "2️⃣ <b>تصميم وتطوير المواقع (Business):</b> يبدأ من 5,000 ج.م\n"
+        msg += "3️⃣ <b>برمجة البوتات الذكية (AI Bots):</b> يبدأ من 3,500 ج.م\n"
+        msg += "4️⃣ <b>إدارة الحملات الإعلانية (Growth):</b> تحدد حسب الميزانية\n\n"
+        msg += "<i>ملاحظة: جميع الأسعار قابلة للتخصيص حسب متطلبات مشروعك بدقة بعد تحليل نشاطك مجاناً عبر موقعنا.</i>"
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
+    elif cb_data == "offers":
+        msg = "💼 <b>العروض والخصومات الحصرية:</b>\n\n"
+        msg += "🔥 <b>عرض البداية القوية:</b> احصل على تصميم هوية كاملة + بوت تيليجرام للرد الآلي بخصم 20% لفترة محدودة!\n"
+        msg += "🚀 <b>عرض المتاجر الإلكترونية:</b> برمجة متجر متكامل مع استضافة مجانية لمدة سنة بأفضل سعر في السوق.\n\n"
+        msg += "للطلب والاستفسار، تواصل مع فريق المبيعات من قائمة الدعم الفني."
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
+    elif cb_data == "support":
+        msg = "📞 <b>الدعم الفني والمبيعات:</b>\n\n"
+        msg += "نحن هنا لخدمتك دائماً. يمكنك التواصل معنا عبر الطرق التالية:\n"
+        msg += "📧 البريد الإلكتروني: support@codo1.com\n"
+        msg += "💬 واتساب: 01095817701\n"
+        msg += "أو اترك رسالتك هنا وسنقوم بالرد عليك في أقرب وقت!"
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
     # Admin actions on payments
     if cb_data.startswith("pay_approve_"):
         order_id = cb_data.replace("pay_approve_", "")
@@ -746,6 +791,20 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
         return
 
+    elif cb_data.startswith("settoken_"):
+        order_id = cb_data.replace("settoken_", "")
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": f"🤖 أرسل التوكن (Token) الخاص بالبوت ليتم حفظه وتسليمه للعميل للطلب:\n<code>{order_id}</code>",
+            "parse_mode": "HTML",
+            "reply_markup": {"force_reply": True, "selective": True}
+        }
+        requests.post(url, json=payload)
+        DB.save_pending_action(chat_id, {"action": "set_token", "order_id": order_id, "original_msg_id": msg_id})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
     # Order lifecycle updates
     if cb_data.startswith("approve_"):
         order_id = cb_data.replace("approve_", "")
@@ -807,15 +866,23 @@ def process_message_update(token, chat_id, text, photo, msg_id):
     
     if text == "/start":
         DB.delete_pending_action(chat_id)
-        msg_text = "👋 <b>مرحباً بك في بوت خدمة العملاء وتأكيد الطلبات!</b>\n\nأنا الموظف الافتراضي المخصص لمساعدتك.\nمن فضلك اختر إحدى الخدمات المتاحة أدناه:"
+        msg_text = "👋 <b>مرحباً بك في بوت خدمة العملاء والمبيعات!</b>\n\nأنا الموظف الافتراضي المخصص لخدمتك وتلبية طلباتك على مدار الساعة.\nمن فضلك اختر إحدى الخدمات من القائمة أدناه لتنفيذها فوراً:"
         reply_markup = {
             "inline_keyboard": [
                 [
-                    {"text": "📋 استعلام عن طلب", "callback_data": "inquiry"},
-                    {"text": "💳 تأكيد الدفع", "callback_data": "payment"}
+                    {"text": "🚀 استلم أوردراتك (تسليم فوري)", "callback_data": "delivery"}
                 ],
                 [
-                    {"text": "🚀 استلام الأوردر (خدمة جديدة)", "callback_data": "delivery"}
+                    {"text": "📋 استعلام عن طلب حالي", "callback_data": "inquiry"},
+                    {"text": "💳 إرسال إيصال الدفع", "callback_data": "payment"}
+                ],
+                [
+                    {"text": "💡 طلب استشارة مجانية", "callback_data": "consultation"},
+                    {"text": "📚 دليل الخدمات والأسعار", "callback_data": "pricing"}
+                ],
+                [
+                    {"text": "💼 عروض وخصومات حصريّة", "callback_data": "offers"},
+                    {"text": "📞 الدعم الفني", "callback_data": "support"}
                 ]
             ]
         }
@@ -859,6 +926,21 @@ def process_message_update(token, chat_id, text, photo, msg_id):
             requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
                 "chat_id": chat_id,
                 "text": f"👨‍💻 تم تعيين المطور: <b>{text}</b> للطلب <code>{order_id}</code>" ,
+                "parse_mode": "HTML",
+                "reply_to_message_id": msg_id
+            })
+            update_admin_message(token, chat_id, orig_msg_id, order)
+
+    elif action == "set_token":
+        order = DB.get_order(order_id)
+        if order:
+            order["delivery_token"] = text.strip()
+            DB.save_order(order_id, order)
+            DB.delete_pending_action(chat_id)
+            # Acknowledge to admin
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"✅ تم حفظ توكن التسليم للطلب <code>{order_id}</code> وهو جاهز ليستلمه العميل." ,
                 "parse_mode": "HTML",
                 "reply_to_message_id": msg_id
             })
@@ -918,6 +1000,22 @@ def process_message_update(token, chat_id, text, photo, msg_id):
             "parse_mode": "HTML"
         })
 
+    elif action == "free_consultation":
+        DB.delete_pending_action(chat_id)
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": "✅ شكراً لك! تم تسجيل طلبك بنجاح. سيقوم أحد خبرائنا بالاتصال بك على هذا الرقم قريباً.",
+            "reply_to_message_id": msg_id
+        })
+        # notify admin
+        config = load_config()
+        admin_chat_id = config.get("chat_id")
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+            "chat_id": admin_chat_id,
+            "text": f"💡 <b>طلب استشارة مجانية جديد:</b>\n\nالرقم المرسل: {text}\nيرجى التواصل معه في أقرب وقت.",
+            "parse_mode": "HTML"
+        })
+
     elif action == "order_delivery":
         order = DB.get_order(text)
         if not order:
@@ -939,15 +1037,18 @@ def process_message_update(token, chat_id, text, photo, msg_id):
         pay_status = order.get("payment_status", "unpaid")
         cost = order.get("cost", "لم تحدد بعد")
         brand = order.get("business_name", "")
+        delivery_token = order.get("delivery_token", "")
 
         if pay_status == "paid":
-            # Generate dummy bot details as simulating automated delivery
-            dummy_token = f"8{random.randint(10000000, 99999999)}:AAH{random.randint(10000,99999)}_{brand[:5]}..._x"
-            msg_body = f"🎉 <b>مبروك! تم تجهيز وتسليم الأوردر الخاص بك (البراند: {brand}).</b>\n\n"
-            msg_body += f"🤖 <b>بيانات البوت الخاص بك جاهزة الآن للاستخدام:</b>\n"
-            msg_body += f"🔑 <b>التوكن (Token):</b>\n<code>{dummy_token}</code>\n"
-            msg_body += f"💬 <b>معرف الدردشة الأساسي الخاص بك:</b>\n<code>{chat_id}</code>\n\n"
-            msg_body += f"نسعد دائماً بخدمتكم! لا تترددوا في طلب أي تعديلات لاحقة."
+            if delivery_token:
+                msg_body = f"🎉 <b>مبروك! تم تجهيز وتسليم الأوردر الخاص بك (البراند: {brand}).</b>\n\n"
+                msg_body += f"🤖 <b>بيانات البوت الخاص بك جاهزة الآن للاستخدام:</b>\n"
+                msg_body += f"🔑 <b>التوكن (Token):</b>\n<code>{delivery_token}</code>\n"
+                msg_body += f"💬 <b>معرف الدردشة الأساسي الخاص بك:</b>\n<code>{chat_id}</code>\n\n"
+                msg_body += f"نسعد دائماً بخدمتكم! لا تترددوا في طلب أي تعديلات لاحقة."
+            else:
+                msg_body = f"✅ <b>تم تأكيد دفعك بنجاح للبراند: {brand}.</b>\n\n"
+                msg_body += f"جاري حالياً رفع ملفات المشروع وإعداد البوت الخاص بك من قبل المطور. بمجرد الانتهاء سيصلك التوكن فوراً على هذه الدردشة. شكراً لثقتكم بنا!"
         else:
             msg_body = f"⚠️ <b>عذراً، لا يمكننا تسليم الأوردر في الوقت الحالي!</b>\n\n"
             msg_body += f"البراند: <b>{brand}</b>\n"
