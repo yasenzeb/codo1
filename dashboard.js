@@ -157,32 +157,28 @@ function initTheme() {
   });
 }
 
-// Collapsible Simulator Card
-function initSimulatorCollapse() {
-  const header = document.getElementById("simulatorHeader");
-  const card = document.querySelector(".simulator-card");
-  header.addEventListener("click", () => {
-    card.classList.toggle("collapsed");
-  });
-}
 
 // Fetch Order Data from server
 async function fetchOrder() {
   if (!orderId) return;
   try {
     const res = await fetch(`/api/order/${orderId}`);
+    const mainEl = document.querySelector("main.dash-container");
+    const errorEl = document.getElementById("errorView");
+    
     if (res.status === 200) {
       const data = await res.json();
       if (data.ok) {
         orderData = data.order;
         updateStatusWidget(orderData.status);
         
-        // Hide error and show container in case it was toggled
-        document.querySelector(".dash-container").style.display = "grid";
-        document.getElementById("errorView").style.display = "none";
+        // Show main grid, hide error
+        if (mainEl) mainEl.style.display = "";
+        if (errorEl) errorEl.style.display = "none";
 
         // Only render the static data once on load, to prevent layout flashing
-        if (!document.getElementById("infoName").textContent || document.getElementById("infoName").textContent === "-") {
+        const infoName = document.getElementById("infoName");
+        if (!infoName || !infoName.textContent || infoName.textContent === "-") {
           renderOrderInfo();
           renderAnalysisData();
         } else {
@@ -199,14 +195,17 @@ async function fetchOrder() {
             payEl.style.color = "hsl(var(--status-rejected-fg))";
           }
         }
+      } else {
+        // API returned ok: false
+        if (mainEl) mainEl.style.display = "none";
+        if (errorEl) { errorEl.style.display = "flex"; }
+        if (typeof lucide !== "undefined") lucide.createIcons();
       }
     } else {
-      // Order not found or deleted
-      document.querySelector(".dash-container").style.display = "none";
-      document.getElementById("errorView").style.display = "flex";
-      if (typeof lucide !== "undefined") {
-        lucide.createIcons();
-      }
+      // 404 or other error - order not found or deleted
+      if (mainEl) mainEl.style.display = "none";
+      if (errorEl) { errorEl.style.display = "flex"; }
+      if (typeof lucide !== "undefined") lucide.createIcons();
     }
   } catch (err) {
     console.error("Error fetching order status:", err);

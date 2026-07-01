@@ -86,12 +86,20 @@ class DB:
         
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                res = requests.get(f"{kv_url}/get/order:{order_id}", headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                res = requests.post(
+                    f"{kv_url}/pipeline",
+                    json=[["GET", f"order:{order_id}"]],
+                    headers=headers,
+                    timeout=8
+                )
                 if res.status_code == 200:
-                    val = res.json().get("result")
-                    if val:
-                        return json.loads(val)
+                    results = res.json()
+                    if results and results[0] and results[0].get("result"):
+                        return json.loads(results[0]["result"])
             except Exception as e:
                 print(f"Vercel KV Error (GET order): {e}")
             return None
@@ -113,21 +121,28 @@ class DB:
 
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                # Delete order key
-                requests.post(f"{kv_url}/del/order:{order_id}", headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                # Build delete pipeline
+                del_cmds = [["DEL", f"order:{order_id}"]]
                 if brand_slug:
-                    requests.post(f"{kv_url}/del/order_by_brand:{brand_slug}", headers=headers, timeout=5)
+                    del_cmds.append(["DEL", f"order_by_brand:{brand_slug}"])
+                requests.post(f"{kv_url}/pipeline", json=del_cmds, headers=headers, timeout=8)
                 
                 # Remove from ids list
-                ids_res = requests.get(f"{kv_url}/get/order_ids", headers=headers, timeout=5)
+                ids_res = requests.post(f"{kv_url}/pipeline", json=[["GET", "order_ids"]], headers=headers, timeout=8)
                 if ids_res.status_code == 200:
-                    ids_val = ids_res.json().get("result")
-                    if ids_val:
-                        ids = json.loads(ids_val)
-                        if order_id in ids:
-                            ids.remove(order_id)
-                            requests.post(f"{kv_url}/set/order_ids", data=json.dumps(ids), headers=headers, timeout=5)
+                    results = ids_res.json()
+                    if results and results[0] and results[0].get("result"):
+                        try:
+                            ids = json.loads(results[0]["result"])
+                            if order_id in ids:
+                                ids.remove(order_id)
+                                requests.post(f"{kv_url}/pipeline", json=[["SET", "order_ids", json.dumps(ids)]], headers=headers, timeout=8)
+                        except Exception:
+                            pass
             except Exception as e:
                 print(f"Vercel KV Error (DELETE order): {e}")
         else:
@@ -144,12 +159,21 @@ class DB:
         
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                res = requests.get(f"{kv_url}/get/order_by_brand:{slug}", headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                res = requests.post(
+                    f"{kv_url}/pipeline",
+                    json=[["GET", f"order_by_brand:{slug}"]],
+                    headers=headers,
+                    timeout=8
+                )
                 if res.status_code == 200:
-                    order_id = res.json().get("result")
-                    if order_id:
-                        return DB.get_order(json.loads(order_id))
+                    results = res.json()
+                    if results and results[0] and results[0].get("result"):
+                        found_id = results[0]["result"]
+                        return DB.get_order(found_id)
             except Exception as e:
                 print(f"Vercel KV Error (GET order by brand): {e}")
             return None
@@ -169,22 +193,43 @@ class DB:
         
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                # Set order key
-                requests.post(f"{kv_url}/set/order:{order_id}", data=json.dumps(order_data), headers=headers, timeout=5)
-                # Map brand slug to ID
-                requests.post(f"{kv_url}/set/order_by_brand:{brand_slug}", data=json.dumps(order_id), headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                order_json = json.dumps(order_data, ensure_ascii=False)
                 
-                # Maintain list of order IDs
-                ids_res = requests.get(f"{kv_url}/get/order_ids", headers=headers, timeout=5)
+                # Use Upstash REST pipeline for atomic multi-set
+                pipeline_body = [
+                    ["SET", f"order:{order_id}", order_json],
+                    ["SET", f"order_by_brand:{brand_slug}", order_id]
+                ]
+                pipe_res = requests.post(
+                    f"{kv_url}/pipeline",
+                    json=pipeline_body,
+                    headers=headers,
+                    timeout=10
+                )
+                print(f"KV pipeline save: {pipe_res.status_code} {pipe_res.text[:200]}")
+
+                # Also update order_ids list
+                ids_res = requests.post(f"{kv_url}/pipeline", json=[["GET", "order_ids"]], headers=headers, timeout=8)
                 ids = []
                 if ids_res.status_code == 200:
-                    ids_val = ids_res.json().get("result")
-                    if ids_val:
-                        ids = json.loads(ids_val)
+                    results = ids_res.json()
+                    if results and results[0] and results[0].get("result"):
+                        try:
+                            ids = json.loads(results[0]["result"])
+                        except Exception:
+                            ids = []
                 if order_id not in ids:
                     ids.append(order_id)
-                    requests.post(f"{kv_url}/set/order_ids", data=json.dumps(ids), headers=headers, timeout=5)
+                    requests.post(
+                        f"{kv_url}/pipeline",
+                        json=[["SET", "order_ids", json.dumps(ids)]],
+                        headers=headers,
+                        timeout=8
+                    )
             except Exception as e:
                 print(f"Vercel KV Error (SET order): {e}")
         else:
@@ -199,16 +244,23 @@ class DB:
         
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                # Increment key and return new value
-                res = requests.post(f"{kv_url}/incr/order_counter", headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                res = requests.post(
+                    f"{kv_url}/pipeline",
+                    json=[["INCR", "order_counter"]],
+                    headers=headers,
+                    timeout=8
+                )
                 if res.status_code == 200:
-                    val = res.json().get("result")
-                    if val is not None:
-                        return int(val)
+                    results = res.json()
+                    if results and results[0] and results[0].get("result") is not None:
+                        return int(results[0]["result"])
             except Exception as e:
                 print(f"Vercel KV Error (INCR order_counter): {e}")
-            return random.randint(100, 999) # fallback
+            return random.randint(100, 999)  # fallback
         else:
             orders = DB._load_local_orders()
             counter = len(orders) + 1
@@ -221,12 +273,20 @@ class DB:
         
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                requests.post(f"{kv_url}/set/pending_action:{chat_id}", data=json.dumps(action_data), headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                # Store with 10min TTL
+                requests.post(
+                    f"{kv_url}/pipeline",
+                    json=[["SET", f"pending_action:{chat_id}", json.dumps(action_data), "EX", 600]],
+                    headers=headers,
+                    timeout=8
+                )
             except Exception as e:
                 print(f"Vercel KV Error (save action): {e}")
         else:
-            # save locally to config file or a temporary memory variable
             if not hasattr(DB, "_local_actions"):
                 DB._local_actions = {}
             DB._local_actions[str(chat_id)] = action_data
@@ -238,12 +298,20 @@ class DB:
         
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                res = requests.get(f"{kv_url}/get/pending_action:{chat_id}", headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                res = requests.post(
+                    f"{kv_url}/pipeline",
+                    json=[["GET", f"pending_action:{chat_id}"]],
+                    headers=headers,
+                    timeout=8
+                )
                 if res.status_code == 200:
-                    val = res.json().get("result")
-                    if val:
-                        return json.loads(val)
+                    results = res.json()
+                    if results and results[0] and results[0].get("result"):
+                        return json.loads(results[0]["result"])
             except Exception as e:
                 print(f"Vercel KV Error (get action): {e}")
             return None
@@ -259,8 +327,16 @@ class DB:
         
         if kv_url and kv_token:
             try:
-                headers = {"Authorization": f"Bearer {kv_token}"}
-                requests.post(f"{kv_url}/del/pending_action:{chat_id}", headers=headers, timeout=5)
+                headers = {
+                    "Authorization": f"Bearer {kv_token}",
+                    "Content-Type": "application/json"
+                }
+                requests.post(
+                    f"{kv_url}/pipeline",
+                    json=[["DEL", f"pending_action:{chat_id}"]],
+                    headers=headers,
+                    timeout=8
+                )
             except Exception as e:
                 print(f"Vercel KV Error (delete action): {e}")
         else:
@@ -319,12 +395,14 @@ def get_config_api():
     if masked_token and masked_token != "YOUR_TELEGRAM_BOT_TOKEN":
         if len(masked_token) > 10:
             masked_token = masked_token[:6] + "..." + masked_token[-4:]
+    kv_ok = bool(os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL"))
     return jsonify({
         "bot_token_configured": config.get("bot_token") != "YOUR_TELEGRAM_BOT_TOKEN",
         "chat_id_configured": config.get("chat_id") != "YOUR_TELEGRAM_CHAT_ID",
         "bot_token_masked": masked_token,
         "chat_id": config.get("chat_id"),
-        "database_type": "Vercel KV" if (os.environ.get("KV_REST_API_URL") or os.environ.get("KV_URL")) else "Local JSON"
+        "database_type": "Vercel KV (Upstash)" if kv_ok else "Local JSON File",
+        "kv_connected": kv_ok
     })
 
 @app.route("/api/config", methods=["POST"])
@@ -341,6 +419,35 @@ def update_config_api():
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=4, ensure_ascii=False)
     return jsonify({"ok": True, "message": "Configuration updated successfully"})
+
+@app.route("/api/setup-webhook", methods=["GET", "POST"])
+def setup_webhook_api():
+    """Call this endpoint after deploying a new bot token to register the Telegram webhook."""
+    host = request.headers.get("Host", "")
+    scheme = request.headers.get("X-Forwarded-Proto", "https")
+    webhook_url = f"{scheme}://{host}/api/telegram-webhook"
+    config = load_config()
+    token = config.get("bot_token", "")
+    
+    if not token or token == "YOUR_TELEGRAM_BOT_TOKEN":
+        return jsonify({"ok": False, "error": "Bot token not configured. Set TELEGRAM_BOT_TOKEN env variable."}), 400
+    
+    try:
+        tg_url = f"https://api.telegram.org/bot{token}/setWebhook"
+        res = requests.post(
+            tg_url,
+            json={"url": webhook_url, "allowed_updates": ["message", "callback_query"]},
+            timeout=10
+        )
+        res_data = res.json()
+        return jsonify({
+            "ok": res_data.get("ok"),
+            "description": res_data.get("description", ""),
+            "webhook_url": webhook_url,
+            "telegram_response": res_data
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/submit-order", methods=["POST"])
 def submit_order():
