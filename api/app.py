@@ -822,6 +822,16 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
         return
 
+    elif cb_data.startswith("adminview_"):
+        order_id = cb_data.replace("adminview_", "")
+        order = DB.get_order(order_id)
+        if order:
+            update_admin_message(token, chat_id, msg_id, order)
+            requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        else:
+            requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id, "text": "الطلب غير موجود أو تم حذفه", "show_alert": True})
+        return
+
     elif cb_data.startswith("custombtn_"):
         parts = cb_data.split("_")
         if len(parts) >= 3:
@@ -897,6 +907,34 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
 def process_message_update(token, chat_id, text, photo, msg_id):
     pending = DB.get_pending_action(chat_id)
     
+    if text == "/admin":
+        config = load_config()
+        admin_chat_id = config.get("chat_id")
+        if str(chat_id) == str(admin_chat_id):
+            DB.delete_pending_action(chat_id)
+            if DB._supabase_url():
+                ids = DB._supabase_get("order_ids") or []
+            else:
+                ids = list(DB._load_local_orders().keys())
+                
+            if not ids:
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": "📦 <b>لا توجد طلبات نشطة حالياً.</b>", "parse_mode": "HTML"})
+                return
+                
+            reply_markup = {"inline_keyboard": []}
+            for o_id in ids[-20:]: # Show up to 20 recent orders
+                reply_markup["inline_keyboard"].append([
+                    {"text": f"📦 عرض الطلب: {o_id}", "callback_data": f"adminview_{o_id}"}
+                ])
+                
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id, 
+                "text": "👑 <b>قائمة الإدارة - الطلبات النشطة:</b>\nاضغط على أي طلب لفتحه وإدارته:", 
+                "parse_mode": "HTML",
+                "reply_markup": reply_markup
+            })
+            return
+
     if text == "/start":
         DB.delete_pending_action(chat_id)
         msg_text = "👋 <b>مرحباً بك في بوت خدمة العملاء والمبيعات!</b>\n\nأنا الموظف الافتراضي المخصص لخدمتك وتلبية طلباتك على مدار الساعة.\nمن فضلك اختر إحدى الخدمات من القائمة أدناه لتنفيذها فوراً:"
