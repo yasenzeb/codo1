@@ -637,6 +637,47 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
     status = ""
     order_id = ""
 
+    # ---- Admin-only callbacks ----
+    if cb_data == "admin_back":
+        # Re-render the /admin orders list
+        config = load_config()
+        admin_chat_id = config.get("chat_id")
+        if str(chat_id) == str(admin_chat_id):
+            if DB._supabase_url():
+                ids = DB._supabase_get("order_ids") or []
+            else:
+                ids = list(DB._load_local_orders().keys())
+            if not ids:
+                requests.post(f"https://api.telegram.org/bot{token}/editMessageText", json={
+                    "chat_id": chat_id, "message_id": msg_id,
+                    "text": "📦 <b>لا توجد طلبات نشطة حالياً.</b>", "parse_mode": "HTML"
+                })
+            else:
+                reply_markup = {"inline_keyboard": []}
+                for o_id in ids[-20:]:
+                    reply_markup["inline_keyboard"].append([
+                        {"text": f"📦 {o_id}", "callback_data": f"adminview_{o_id}"}
+                    ])
+                requests.post(f"https://api.telegram.org/bot{token}/editMessageText", json={
+                    "chat_id": chat_id, "message_id": msg_id,
+                    "text": "👑 <b>قائمة الإدارة - الطلبات النشطة:</b>\nاضغط على أي طلب لفتحه وإدارته:",
+                    "parse_mode": "HTML", "reply_markup": reply_markup
+                })
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
+    elif cb_data.startswith("adminmsg_"):
+        order_id = cb_data.replace("adminmsg_", "")
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": f"📩 اكتب الرسالة التي تريد إرسالها لعميل الطلب:\n<code>{order_id}</code>",
+            "parse_mode": "HTML",
+            "reply_markup": {"force_reply": True, "selective": True}
+        })
+        DB.save_pending_action(chat_id, {"action": "admin_send_msg", "order_id": order_id, "original_msg_id": msg_id})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
     # Check state commands
     if cb_data == "inquiry":
         # Force reply to user
@@ -1017,6 +1058,29 @@ def process_message_update(token, chat_id, text, photo, msg_id):
             })
             update_admin_message(token, chat_id, orig_msg_id, order)
 
+    elif action == "admin_send_msg":
+        order = DB.get_order(order_id)
+        if order:
+            user_chat = order.get("user_chat_id")
+            DB.delete_pending_action(chat_id)
+            if user_chat:
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                    "chat_id": user_chat,
+                    "text": f"📩 <b>رسالة من الإدارة بخصوص طلبك ({order.get('business_name')}):</b>\n\n{text}",
+                    "parse_mode": "HTML"
+                })
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": f"✅ تم إرسال الرسالة بنجاح للعميل ({order.get('business_name')}).",
+                    "reply_to_message_id": msg_id
+                })
+            else:
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": "❌ لا يوجد Chat ID لهذا العميل. لم يتواصل العميل مع البوت بعد.",
+                    "reply_to_message_id": msg_id
+                })
+
     elif action == "add_custom_btn":
         order = DB.get_order(order_id)
         if order:
@@ -1325,25 +1389,38 @@ def update_admin_message(token, chat_id, msg_id, order):
                 {"text": "👨‍💻 تعيين مطور", "callback_data": f"setdev_{order_id}"}
             ],
             [
-                {"text": "🤖 إرفاق توكن تسليم", "callback_data": f"settoken_{order_id}"}
-            ],
-            [
+                {"text": "🤖 إرفاق توكن تسليم", "callback_data": f"settoken_{order_id}"},
                 {"text": "🔘 إضافة زر للعميل", "callback_data": f"addbtn_{order_id}"}
             ],
             [
+                {"text": "📩 إرسال رسالة للعميل", "callback_data": f"adminmsg_{order_id}"}
+            ],
+            [
                 {"text": "🗑️ حذف الطلب نهائياً", "callback_data": f"delete_{order_id}"}
+            ],
+            [
+                {"text": "🔙 العودة لقائمة الطلبات", "callback_data": "admin_back"}
             ]
         ]
     }
 
+    # Try editMessageText first; if fails (e.g. message too long or same), send new
     edit_url = f"https://api.telegram.org/bot{token}/editMessageText"
-    requests.post(edit_url, json={
+    res = requests.post(edit_url, json={
         "chat_id": chat_id,
         "message_id": msg_id,
         "text": msg,
         "parse_mode": "HTML",
         "reply_markup": reply_markup
     })
+    # If edit fails, send as new message
+    if res.status_code != 200:
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": msg,
+            "parse_mode": "HTML",
+            "reply_markup": reply_markup
+        })
 
 # Start Telegram Bot Polling Thread as daemon ONLY if NOT on Vercel
 if not os.environ.get("VERCEL"):
