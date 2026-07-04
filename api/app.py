@@ -854,12 +854,57 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
             "chat_id": chat_id,
-            "text": f"🔘 أرسل نص الزر والرسالة للعميل مفصولين بشرطة (-) للطلب:\n<code>{order_id}</code>\nمثال: استلام التصميم - تفضل هذا هو الرابط...",
+            "text": "⚙️ <b>اختر وظيفة الزر المطلوب إضافته للعميل:</b>",
+            "parse_mode": "HTML",
+            "reply_markup": {
+                "inline_keyboard": [
+                    [{"text": "💬 عرض رسالة/رابط فقط", "callback_data": f"btnmode_{order_id}_text"}],
+                    [{"text": "📸 طلب سكرين شوت تحويل", "callback_data": f"btnmode_{order_id}_screenshot"}],
+                    [{"text": "✍️ طلب إجابة نصية للعميل", "callback_data": f"btnmode_{order_id}_input"}]
+                ]
+            }
+        }
+        requests.post(url, json=payload)
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
+    elif cb_data.startswith("btnmode_"):
+        # Format: btnmode_{order_id}_{mode}
+        parts = cb_data.split("_")
+        order_id = parts[1]
+        mode = parts[2]
+        
+        mode_ar = {"text": "رسالة/رابط", "screenshot": "سكرين شوت تحويل", "input": "إجابة نصية"}.get(mode, mode)
+        
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": f"✍️ <b>المطلوب: زر ميزة [{mode_ar}]</b>\n\nأرسل اسم/عنوان الزر للعميل:\nمثال: <code>تأكيد التحويل</code>",
             "parse_mode": "HTML",
             "reply_markup": {"force_reply": True, "selective": True}
         }
         requests.post(url, json=payload)
-        DB.save_pending_action(chat_id, {"action": "add_custom_btn", "order_id": order_id, "original_msg_id": msg_id})
+        DB.save_pending_action(chat_id, {
+            "action": "addbtn_get_title",
+            "order_id": order_id,
+            "mode": mode,
+            "original_msg_id": msg_id
+        })
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
+    elif cb_data.startswith("clearbtn_"):
+        order_id = cb_data.replace("clearbtn_", "")
+        order = DB.get_order(order_id)
+        if order:
+            order["custom_buttons"] = []
+            DB.save_order(order_id, order)
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"🗑️ تم حذف جميع الأزرار المخصصة للطلب <code>{order_id}</code> بنجاح.",
+                "parse_mode": "HTML"
+            })
+            update_admin_message(token, chat_id, msg_id, order)
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
         return
 
@@ -880,12 +925,26 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
             btn_idx = int(parts[2])
             order = DB.get_order(order_id)
             if order and "custom_buttons" in order and len(order["custom_buttons"]) > btn_idx:
-                msg_body = order["custom_buttons"][btn_idx]["msg"]
+                btn = order["custom_buttons"][btn_idx]
+                msg_body = btn["msg"]
+                mode = btn.get("mode", "text")
+                
+                # Show client the prompt
                 requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
                     "chat_id": chat_id,
                     "text": msg_body,
                     "parse_mode": "HTML"
                 })
+                
+                # If needs input, wait for screenshot or text
+                if mode == "screenshot":
+                    DB.save_pending_action(chat_id, {
+                        "action": f"client_custom_screenshot:{order_id}:{btn_idx}"
+                    })
+                elif mode == "input":
+                    DB.save_pending_action(chat_id, {
+                        "action": f"client_custom_input:{order_id}:{btn_idx}"
+                    })
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
         return
 
@@ -1081,30 +1140,84 @@ def process_message_update(token, chat_id, text, photo, msg_id):
                     "reply_to_message_id": msg_id
                 })
 
-    elif action == "add_custom_btn":
+    elif action == "addbtn_get_title":
+        # Save title, move to get msg prompt
+        mode = pending.get("mode")
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": f"💬 أرسل الآن الرسالة/الطلب الذي سيظهر للعميل عند ضغط الزر <b>[{text}]</b>:",
+            "parse_mode": "HTML",
+            "reply_markup": {"force_reply": True, "selective": True}
+        }
+        requests.post(url, json=payload)
+        DB.save_pending_action(chat_id, {
+            "action": "addbtn_get_msg",
+            "order_id": order_id,
+            "mode": mode,
+            "title": text,
+            "original_msg_id": orig_msg_id
+        })
+        return
+
+    elif action == "addbtn_get_msg":
+        mode = pending.get("mode")
+        title = pending.get("title")
         order = DB.get_order(order_id)
         if order:
-            parts = text.split("-", 1)
-            if len(parts) == 2:
-                btn_text = parts[0].strip()
-                btn_msg = parts[1].strip()
-                if "custom_buttons" not in order:
-                    order["custom_buttons"] = []
-                order["custom_buttons"].append({"text": btn_text, "msg": btn_msg})
-                DB.save_order(order_id, order)
-                DB.delete_pending_action(chat_id)
-                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": f"✅ تم إضافة الزر المخصص بنجاح للطلب <code>{order_id}</code>",
-                    "parse_mode": "HTML",
-                    "reply_to_message_id": msg_id
-                })
-            else:
-                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": "❌ التنسيق غير صحيح. يرجى استخدام: النص - الرسالة",
-                    "reply_to_message_id": msg_id
-                })
+            if "custom_buttons" not in order:
+                order["custom_buttons"] = []
+            order["custom_buttons"].append({
+                "text": title,
+                "mode": mode,
+                "msg": text
+            })
+            DB.save_order(order_id, order)
+            DB.delete_pending_action(chat_id)
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"✅ تم إضافة الزر المخصص <b>[{title}]</b> بنجاح للطلب <code>{order_id}</code>",
+                "parse_mode": "HTML",
+                "reply_to_message_id": msg_id
+            })
+            update_admin_message(token, chat_id, orig_msg_id, order)
+        return
+
+    elif action.startswith("client_custom_input:"):
+        # Format: client_custom_input:{order_id}:{btn_idx}
+        parts = action.split(":")
+        order_id = parts[1]
+        btn_idx = int(parts[2])
+        
+        order = DB.get_order(order_id)
+        DB.delete_pending_action(chat_id)
+        
+        if order and "custom_buttons" in order and len(order["custom_buttons"]) > btn_idx:
+            btn = order["custom_buttons"][btn_idx]
+            btn_title = btn["text"]
+            
+            # Forward input to admin
+            config = load_config()
+            admin_chat_id = config.get("chat_id")
+            
+            admin_text = f"✍️ <b>إجابة جديدة من العميل بخصوص زر مخصص!</b>\n\n"
+            admin_text += f"🏢 <b>البراند:</b> {order.get('business_name')}\n"
+            admin_text += f"🆔 <b>رقم الطلب:</b> <code>{order_id}</code>\n"
+            admin_text += f"🔘 <b>الزر المخصص:</b> {btn_title}\n"
+            admin_text += f"━━━━━━━━━━━━━━━━━━\n"
+            admin_text += f"📝 <b>إجابة العميل:</b>\n{text}"
+            
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": admin_chat_id,
+                "text": admin_text,
+                "parse_mode": "HTML"
+            })
+            
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "✅ تم إرسال إجابتك للإدارة بنجاح. شكراً لك!"
+            })
+        return
 
     elif action == "inquiry":
         # Search by order_id or brand name
@@ -1322,6 +1435,47 @@ def process_message_update(token, chat_id, text, photo, msg_id):
                 "text": f"❌ عذراً، حدث خطأ أثناء إرسال الصورة للإدارة. يرجى المحاولة لاحقاً."
             })
 
+    elif action.startswith("client_custom_screenshot:"):
+        if not photo:
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "❌ خطأ: يرجى إرسال الإثبات كصورة وليس كملف أو نص.",
+                "reply_markup": {"force_reply": True, "selective": True}
+            })
+            return
+
+        parts = action.split(":")
+        order_id = parts[1]
+        btn_idx = int(parts[2])
+
+        order = DB.get_order(order_id)
+        DB.delete_pending_action(chat_id)
+
+        if order and "custom_buttons" in order and len(order["custom_buttons"]) > btn_idx:
+            btn = order["custom_buttons"][btn_idx]
+            btn_title = btn["text"]
+            file_id = photo[-1]["file_id"]
+
+            config = load_config()
+            admin_chat_id = config.get("chat_id")
+
+            admin_text = f"📸 <b>إيصال/صورة جديدة مرسلة من العميل!</b>\n\n"
+            admin_text += f"🏢 <b>البراند:</b> {order.get('business_name')}\n"
+            admin_text += f"🆔 <b>رقم الطلب:</b> <code>{order_id}</code>\n"
+            admin_text += f"🔘 <b>الزر المخصص:</b> {btn_title}"
+
+            requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", json={
+                "chat_id": admin_chat_id,
+                "photo": file_id,
+                "caption": admin_text,
+                "parse_mode": "HTML"
+            })
+
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": "✅ تم إرسال الصورة/السكرين شوت للإدارة بنجاح. شكراً لك!"
+            })
+
 def update_admin_message(token, chat_id, msg_id, order):
     order_id = order["id"]
     name = html.escape(str(order["business_name"]))
@@ -1389,8 +1543,11 @@ def update_admin_message(token, chat_id, msg_id, order):
                 {"text": "👨‍💻 تعيين مطور", "callback_data": f"setdev_{order_id}"}
             ],
             [
-                {"text": "🤖 إرفاق توكن تسليم", "callback_data": f"settoken_{order_id}"},
-                {"text": "🔘 إضافة زر للعميل", "callback_data": f"addbtn_{order_id}"}
+                {"text": "🤖 إرفاق توكن تسليم", "callback_data": f"settoken_{order_id}"}
+            ],
+            [
+                {"text": "🔘 إضافة زر للعميل", "callback_data": f"addbtn_{order_id}"},
+                {"text": "🗑️ حذف أزرار العميل", "callback_data": f"clearbtn_{order_id}"}
             ],
             [
                 {"text": "📩 إرسال رسالة للعميل", "callback_data": f"adminmsg_{order_id}"}
