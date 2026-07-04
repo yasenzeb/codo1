@@ -572,6 +572,9 @@ def send_telegram_notification(order):
                 {"text": "🤖 إرفاق توكن تسليم (للتسليم)", "callback_data": f"settoken_{order_id}"}
             ],
             [
+                {"text": "🔘 إضافة زر للعميل", "callback_data": f"addbtn_{order_id}"}
+            ],
+            [
                 {"text": "🗑️ حذف الطلب نهائياً", "callback_data": f"delete_{order_id}"}
             ]
         ]
@@ -805,6 +808,36 @@ def process_callback_query(token, cb_id, cb_data, chat_id, msg_id, original_text
         requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
         return
 
+    elif cb_data.startswith("addbtn_"):
+        order_id = cb_data.replace("addbtn_", "")
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": f"🔘 أرسل نص الزر والرسالة للعميل مفصولين بشرطة (-) للطلب:\n<code>{order_id}</code>\nمثال: استلام التصميم - تفضل هذا هو الرابط...",
+            "parse_mode": "HTML",
+            "reply_markup": {"force_reply": True, "selective": True}
+        }
+        requests.post(url, json=payload)
+        DB.save_pending_action(chat_id, {"action": "add_custom_btn", "order_id": order_id, "original_msg_id": msg_id})
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
+    elif cb_data.startswith("custombtn_"):
+        parts = cb_data.split("_")
+        if len(parts) >= 3:
+            order_id = parts[1]
+            btn_idx = int(parts[2])
+            order = DB.get_order(order_id)
+            if order and "custom_buttons" in order and len(order["custom_buttons"]) > btn_idx:
+                msg_body = order["custom_buttons"][btn_idx]["msg"]
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": msg_body,
+                    "parse_mode": "HTML"
+                })
+        requests.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": cb_id})
+        return
+
     # Order lifecycle updates
     if cb_data.startswith("approve_"):
         order_id = cb_data.replace("approve_", "")
@@ -946,6 +979,31 @@ def process_message_update(token, chat_id, text, photo, msg_id):
             })
             update_admin_message(token, chat_id, orig_msg_id, order)
 
+    elif action == "add_custom_btn":
+        order = DB.get_order(order_id)
+        if order:
+            parts = text.split("-", 1)
+            if len(parts) == 2:
+                btn_text = parts[0].strip()
+                btn_msg = parts[1].strip()
+                if "custom_buttons" not in order:
+                    order["custom_buttons"] = []
+                order["custom_buttons"].append({"text": btn_text, "msg": btn_msg})
+                DB.save_order(order_id, order)
+                DB.delete_pending_action(chat_id)
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": f"✅ تم إضافة الزر المخصص بنجاح للطلب <code>{order_id}</code>",
+                    "parse_mode": "HTML",
+                    "reply_to_message_id": msg_id
+                })
+            else:
+                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": "❌ التنسيق غير صحيح. يرجى استخدام: النص - الرسالة",
+                    "reply_to_message_id": msg_id
+                })
+
     elif action == "inquiry":
         # Search by order_id or brand name
         order = DB.get_order(text)
@@ -994,11 +1052,23 @@ def process_message_update(token, chat_id, text, photo, msg_id):
             msg_body += f"<code>01095817701</code> (فودافون كاش)\n"
             msg_body += f"بعد التحويل، يرجى الضغط على زر 'تأكيد الدفع' وإرفاق صورة الإيصال."
 
-        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+        payload = {
             "chat_id": chat_id,
             "text": msg_body,
             "parse_mode": "HTML"
-        })
+        }
+        
+        reply_markup = {"inline_keyboard": []}
+        if "custom_buttons" in order:
+            for idx, btn in enumerate(order["custom_buttons"]):
+                reply_markup["inline_keyboard"].append([
+                    {"text": btn["text"], "callback_data": f"custombtn_{order_id}_{idx}"}
+                ])
+        
+        if reply_markup["inline_keyboard"]:
+            payload["reply_markup"] = reply_markup
+
+        requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json=payload)
 
     elif action == "free_consultation":
         DB.delete_pending_action(chat_id)
@@ -1215,6 +1285,12 @@ def update_admin_message(token, chat_id, msg_id, order):
             [
                 {"text": "💰 تحديد التكلفة", "callback_data": f"setcost_{order_id}"},
                 {"text": "👨‍💻 تعيين مطور", "callback_data": f"setdev_{order_id}"}
+            ],
+            [
+                {"text": "🤖 إرفاق توكن تسليم", "callback_data": f"settoken_{order_id}"}
+            ],
+            [
+                {"text": "🔘 إضافة زر للعميل", "callback_data": f"addbtn_{order_id}"}
             ],
             [
                 {"text": "🗑️ حذف الطلب نهائياً", "callback_data": f"delete_{order_id}"}
