@@ -432,6 +432,29 @@ def submit_order():
 
     return jsonify({"ok": True, "order_id": order_id})
 
+@app.route("/api/setup-webhook", methods=["GET"])
+def setup_webhook_api():
+    host = request.headers.get("Host")
+    if host and "127.0.0.1" not in host and "localhost" not in host:
+        scheme = request.headers.get("X-Forwarded-Proto", "https")
+        webhook_url = f"{scheme}://{host}/api/telegram-webhook"
+        
+        config = load_config()
+        token = config.get("bot_token")
+        if not token or token == "YOUR_TELEGRAM_BOT_TOKEN":
+            return jsonify({"ok": False, "error": "Bot token not configured"}), 400
+            
+        set_url = f"https://api.telegram.org/bot{token}/setWebhook"
+        try:
+            res = requests.post(set_url, json={"url": webhook_url}, timeout=5)
+            if res.ok:
+                return jsonify({"ok": True, "message": f"Webhook reset successfully to {webhook_url}", "telegram_response": res.json()})
+            else:
+                return jsonify({"ok": False, "error": "Failed to set Telegram webhook", "telegram_response": res.json()}), 500
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": False, "error": "Cannot set webhook from localhost"}), 400
+
 @app.route("/api/order/<order_id>", methods=["GET"])
 def get_order(order_id):
     order = DB.get_order(order_id)
