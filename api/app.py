@@ -25,6 +25,10 @@ except ImportError:
 app = Flask(__name__)
 CORS(app)
 
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    return jsonify({"ok": True, "status": "running"})
+
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
