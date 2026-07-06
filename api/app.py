@@ -2,53 +2,28 @@
 import os
 import sys
 import json
-import traceback
+import uuid
+import time
+import threading
+import requests
+import re
+import html
+import random
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 
-# Diagnostic: catch any crash during import
-_boot_error = None
+# Add api directory to path to import ai_analyzer (fail-safe for local and Vercel)
 try:
-    import uuid
-    import time
-    import threading
-    import requests
-    import re
-    import html
-    import random
-    from flask import Flask, request, jsonify, send_from_directory
-    from flask_cors import CORS
-except Exception as e:
-    _boot_error = f"IMPORT ERROR: {e}\n{traceback.format_exc()}"
-
-if _boot_error is None:
+    from api.ai_analyzer import analyze_business
+except ImportError:
     try:
-        from api.ai_analyzer import analyze_business
+        from ai_analyzer import analyze_business
     except ImportError:
-        try:
-            from ai_analyzer import analyze_business
-        except ImportError:
-            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-            try:
-                from ai_analyzer import analyze_business
-            except Exception as e:
-                _boot_error = f"AI_ANALYZER IMPORT ERROR: {e}\n{traceback.format_exc()}"
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        from ai_analyzer import analyze_business
 
-if _boot_error:
-    # Minimal Flask app that just reports the error
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-    @app.route("/api/health", methods=["GET"])
-    def health_error():
-        return jsonify({"ok": False, "boot_error": _boot_error}), 500
-    @app.route("/api/setup-webhook", methods=["GET"])
-    def setup_error():
-        return jsonify({"ok": False, "boot_error": _boot_error}), 500
-else:
-    app = Flask(__name__)
-    CORS(app)
-
-    @app.route("/api/health", methods=["GET"])
-    def health_check():
-        return jsonify({"ok": True, "status": "running"})
+app = Flask(__name__)
+CORS(app)
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -456,29 +431,6 @@ def submit_order():
     send_telegram_notification(order)
 
     return jsonify({"ok": True, "order_id": order_id})
-
-@app.route("/api/setup-webhook", methods=["GET"])
-def setup_webhook_api():
-    host = request.headers.get("Host")
-    if host and "127.0.0.1" not in host and "localhost" not in host:
-        scheme = request.headers.get("X-Forwarded-Proto", "https")
-        webhook_url = f"{scheme}://{host}/api/telegram-webhook"
-        
-        config = load_config()
-        token = config.get("bot_token")
-        if not token or token == "YOUR_TELEGRAM_BOT_TOKEN":
-            return jsonify({"ok": False, "error": "Bot token not configured"}), 400
-            
-        set_url = f"https://api.telegram.org/bot{token}/setWebhook"
-        try:
-            res = requests.post(set_url, json={"url": webhook_url}, timeout=5)
-            if res.ok:
-                return jsonify({"ok": True, "message": f"Webhook reset successfully to {webhook_url}", "telegram_response": res.json()})
-            else:
-                return jsonify({"ok": False, "error": "Failed to set Telegram webhook", "telegram_response": res.json()}), 500
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
-    return jsonify({"ok": False, "error": "Cannot set webhook from localhost"}), 400
 
 @app.route("/api/order/<order_id>", methods=["GET"])
 def get_order(order_id):
