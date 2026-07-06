@@ -2,32 +2,53 @@
 import os
 import sys
 import json
-import uuid
-import time
-import threading
-import requests
-import re
-import html
-import random
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
+import traceback
 
-# Add api directory to path to import ai_analyzer (fail-safe for local and Vercel)
+# Diagnostic: catch any crash during import
+_boot_error = None
 try:
-    from api.ai_analyzer import analyze_business
-except ImportError:
+    import uuid
+    import time
+    import threading
+    import requests
+    import re
+    import html
+    import random
+    from flask import Flask, request, jsonify, send_from_directory
+    from flask_cors import CORS
+except Exception as e:
+    _boot_error = f"IMPORT ERROR: {e}\n{traceback.format_exc()}"
+
+if _boot_error is None:
     try:
-        from ai_analyzer import analyze_business
+        from api.ai_analyzer import analyze_business
     except ImportError:
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-        from ai_analyzer import analyze_business
+        try:
+            from ai_analyzer import analyze_business
+        except ImportError:
+            sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+            try:
+                from ai_analyzer import analyze_business
+            except Exception as e:
+                _boot_error = f"AI_ANALYZER IMPORT ERROR: {e}\n{traceback.format_exc()}"
 
-app = Flask(__name__)
-CORS(app)
+if _boot_error:
+    # Minimal Flask app that just reports the error
+    from flask import Flask, jsonify
+    app = Flask(__name__)
+    @app.route("/api/health", methods=["GET"])
+    def health_error():
+        return jsonify({"ok": False, "boot_error": _boot_error}), 500
+    @app.route("/api/setup-webhook", methods=["GET"])
+    def setup_error():
+        return jsonify({"ok": False, "boot_error": _boot_error}), 500
+else:
+    app = Flask(__name__)
+    CORS(app)
 
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    return jsonify({"ok": True, "status": "running"})
+    @app.route("/api/health", methods=["GET"])
+    def health_check():
+        return jsonify({"ok": True, "status": "running"})
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
